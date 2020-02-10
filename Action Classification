@@ -1,0 +1,578 @@
+import numpy as np
+import cv2
+import os
+import random
+from sklearn import neighbors
+
+input_dir = "input_videos"
+output_dir = "output"
+
+def video_frame_generator(filename):
+    """video generator to read frames"""
+    video = cv2.VideoCapture(filename)
+
+    while video.isOpened():
+        ret, frame = video.read()
+
+        if ret:
+            yield frame
+        else:
+            break
+        
+    video.release()
+    yield None
+    
+def import_video(video_name):
+    """import a video with filename, convert it to a m*n*t list with m and n be the size of every frame,
+t be the number of frames in the imported video"""
+
+    image_gen = video_frame_generator(video_name)
+
+    image = image_gen.__next__()
+
+    h, w, d = image.shape
+
+    image_list = []
+
+    while image is not None:
+
+        image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        #image_gauss = cv2.GaussianBlur(image_gray, (5,5), 0)
+
+        image_list.append(image_gray)
+
+        image = image_gen.__next__()
+
+    return image_list
+
+def MHI(image_list,thre,tau):
+    """get the corresponding motion history image list with parameters threshould and tau for a given image list"""
+
+    num = len(image_list)
+
+    MHI = []
+
+    MHI.append(np.zeros(image_list[0].shape))
+
+    for t in range(1,num):
+
+        B = np.absolute(image_list[t]*1.0-image_list[t-1]*1.0)>thre
+
+        B = np.uint8(B)
+
+        kernel = np.ones((2,2))
+
+        B = cv2.morphologyEx(B, cv2.MORPH_OPEN, kernel)
+
+        M = B*tau*1.0 + (1-B)*(MHI[t-1]*1.0-1)
+
+        M[M<0] = 0
+
+        MHI.append(M)
+        
+    return MHI
+        
+def Hu_moment(MHI_list):
+    """Calculate the Hu moments from a list of motion history images"""
+
+    Hu_list = []
+    
+
+    num_MHI = len(MHI_list)
+
+    M, N = MHI_list[0].shape
+
+    x, y = np.meshgrid(np.arange(N),np.arange(M))
+
+    """I = MHI_list[-1]
+
+    M10 = np.sum(x*I)
+    M01 = np.sum(y*I)
+    M00 = np.sum(I)
+
+    x_mean = M10/M00
+    y_mean = M01/M00
+
+    v = np.zeros(8)
+
+    v[0] = np.sum(((x-x_mean)**2)*((y-y_mean)**0)*I)/(M00**2)
+    v[1] = np.sum(((x-x_mean)**1)*((y-y_mean)**1)*I)/(M00**2)
+    v[2] = np.sum(((x-x_mean)**0)*((y-y_mean)**2)*I)/(M00**2)
+    v[3] = np.sum(((x-x_mean)**3)*((y-y_mean)**0)*I)/(M00**2.5)
+    v[4] = np.sum(((x-x_mean)**2)*((y-y_mean)**1)*I)/(M00**2.5)
+    v[5] = np.sum(((x-x_mean)**1)*((y-y_mean)**2)*I)/(M00**2.5)
+    v[6] = np.sum(((x-x_mean)**0)*((y-y_mean)**3)*I)/(M00**2.5)
+    v[7] = np.sum(((x-x_mean)**2)*((y-y_mean)**2)*I)/(M00**3)
+
+    return v"""
+
+    for i in range(0, num_MHI):
+
+        I = MHI_list[i]
+
+        M10 = np.sum(x*I)
+        M01 = np.sum(y*I)
+        M00 = np.sum(I)        
+
+        v = np.zeros(8)
+
+        if M00 == 0:
+
+            #Hu_list.append(v)
+
+            continue
+
+        x_mean = M10/M00
+        y_mean = M01/M00
+
+        u20 = np.sum(((x-x_mean)**2)*((y-y_mean)**0)*I)
+        u11 = np.sum(((x-x_mean)**1)*((y-y_mean)**1)*I)
+        u02 = np.sum(((x-x_mean)**0)*((y-y_mean)**2)*I)
+        u30 = np.sum(((x-x_mean)**3)*((y-y_mean)**0)*I)
+        u21 = np.sum(((x-x_mean)**2)*((y-y_mean)**1)*I)
+        u12 = np.sum(((x-x_mean)**1)*((y-y_mean)**2)*I)
+        u03 = np.sum(((x-x_mean)**0)*((y-y_mean)**3)*I)
+        u22 = np.sum(((x-x_mean)**2)*((y-y_mean)**2)*I)
+
+        
+
+        v[0] = u20/(M00**2)
+        v[1] = u11/(M00**2)
+        v[2] = u02/(M00**2)
+        v[3] = u30/(M00**2.5)
+        v[4] = u21/(M00**2.5)
+        v[5] = u12/(M00**2.5)
+        v[6] = u03/(M00**2.5)
+        v[7] = u22/(M00**3)
+        """v[8] = u20+u02
+        v[8] = v[8]/(M00**2)
+        v[9] = (u20-u02)**2+4*u11**2
+        v[9] = v[9]/(M00**4)
+        v[10] = (u30-3*u12)**2+(3*u21-u03)**2
+        v[10] = v[10]/(M00**5)
+        v[11] = (u30+u12)**2+(u21+u03)**2
+        v[11] = v[11]/(M00**5)
+        v[12] = (u30-3*u12)*(u30+u12)*((u30+u12)**2-3*(u21+u03)**2)+(3*u21-u03)*(u21+u03)*(3*(u30+u12)**2-(u21+u03)**2)
+        v[12] = v[12]/(M00**10)
+        v[13] = (u20-u02)*((u30+u12)**2-(u21+u03)**2)+4*u11*(u30+u12)*(u21+u03)
+        v[13] = v[13]/(M00**7)
+        v[14] = (3*u21-u03)*(u30+u12)*((u30+u12)**2-3*(u21+u03)**2)-(u30-3*u12)*(u21+u03)*(3*(u30+u12)**2-(u21+u03)**2)
+        v[14] = v[14]/(M00**10)"""
+
+        Hu_list.append(v)
+        
+
+
+    return Hu_list
+
+def get_full_list(thre,tau):
+    """read all the video files, get all the frames, convert the frames
+to motion history images and then calculate the Hu-moment for each
+motion history image. The parameters threshould and tau are used when calculating
+the motion history image. The output is the full list of the Hu-moments of all the frames from all the videos
+and a list of labels corresponding to each frame"""
+
+    full_list = []
+    full_label = []
+
+    
+    boxing_dir = os.path.join(input_dir, "boxing")
+    boxing_list = [f for f in os.listdir(boxing_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+    
+    for boxing_video in boxing_list:
+
+        boxing_temp = import_video(os.path.join(boxing_dir,boxing_video))
+        boxing_temp_MHI = MHI(boxing_temp,thre,tau)
+        boxing_temp_Hu = Hu_moment(boxing_temp_MHI)
+
+        full_list.append(boxing_temp_Hu)
+        full_label.append(0)
+
+
+    handclapping_dir = os.path.join(input_dir, "handclapping")
+    handclapping_list = [f for f in os.listdir(handclapping_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+
+    
+    for handclapping_video in handclapping_list:
+
+        handclapping_temp = import_video(os.path.join(handclapping_dir,handclapping_video))
+        handclapping_temp_MHI = MHI(handclapping_temp,thre,tau)
+        handclapping_temp_Hu = Hu_moment(handclapping_temp_MHI)
+
+        full_list.append(handclapping_temp_Hu)
+        full_label.append(1)
+
+    handwaving_dir = os.path.join(input_dir, "handwaving")
+    handwaving_list = [f for f in os.listdir(handwaving_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+
+    
+    for handwaving_video in handwaving_list:
+
+        handwaving_temp = import_video(os.path.join(handwaving_dir,handwaving_video))
+        handwaving_temp_MHI = MHI(handwaving_temp,thre,tau)
+        handwaving_temp_Hu = Hu_moment(handwaving_temp_MHI)
+
+        full_list.append(handwaving_temp_Hu)
+        full_label.append(2)
+
+    jogging_dir = os.path.join(input_dir, "jogging")
+    jogging_list = [f for f in os.listdir(jogging_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+
+    
+    for jogging_video in jogging_list:
+
+        jogging_temp = import_video(os.path.join(jogging_dir,jogging_video))
+        jogging_temp_MHI = MHI(jogging_temp,thre,tau)
+        jogging_temp_Hu = Hu_moment(jogging_temp_MHI)
+
+        full_list.append(jogging_temp_Hu)
+        full_label.append(3)
+
+    running_dir = os.path.join(input_dir, "running")
+    running_list = [f for f in os.listdir(running_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+
+    
+    for running_video in running_list:
+
+        running_temp = import_video(os.path.join(running_dir,running_video))
+        running_temp_MHI = MHI(running_temp,thre,tau)
+        running_temp_Hu = Hu_moment(running_temp_MHI)
+
+        full_list.append(running_temp_Hu)
+        full_label.append(4)
+
+    walking_dir = os.path.join(input_dir, "walking")
+    walking_list = [f for f in os.listdir(walking_dir)
+                   if f[0] != '.' and f.endswith('.avi')]
+
+    
+    for walking_video in walking_list:
+
+        walking_temp = import_video(os.path.join(walking_dir,walking_video))
+        walking_temp_MHI = MHI(walking_temp,thre,tau)
+        walking_temp_Hu = Hu_moment(walking_temp_MHI)
+
+        full_list.append(walking_temp_Hu)
+        full_label.append(5)
+
+
+    return full_list, full_label
+
+def split_data(full_list, full_label,N1,N2):
+    """randomly split the data list full_list and labels full_label into training set (N1 samples)
+and testing set (N2 samples)"""
+
+    x1 = []
+    y1 = []
+    x2 = []
+    y2 = []
+
+    X = []
+    Y = []
+
+    for i in range(0, len(full_list)):
+
+        for j in range(0, len(full_list[i])):
+
+            X.append(full_list[i][j])
+            Y.append(full_label[i])
+
+    index = np.arange(len(X))
+    index = np.random.permutation(index)
+    p=0.7
+    N = int(len(X)*p)    
+
+    for i in range(0, N1):
+
+            x1.append(X[index[i]])
+            y1.append(Y[index[i]])
+
+    for i in range(N1, N1+N2):
+
+            x2.append(X[index[i]])
+            y2.append(Y[index[i]])
+
+    return x1,y1,x2,y2
+
+
+def evaluate(x1, y1, x2, y2, K):
+    """evaluate the performance of the model based on training set"""
+
+    conf = np.zeros((6,6))
+    total = np.zeros((6,6))
+
+    num_test = len(x2)
+    num_train = len(x1)
+
+    for i in range(0, num_test):
+
+        d = []
+
+        for j in range(0, num_train):
+
+            d_temp = np.sum((x2[i]-x1[j])**2)
+            d.append(d_temp)
+
+        index = sorted(range(len(d)), key=d.__getitem__)
+
+        p = np.zeros(6)
+
+        for k in range(0, K):
+            p[y1[index[k]]] += 1
+
+        p_max = np.where(p==p.max())
+
+        if p_max[0][0] == y2[i]:
+            conf[y2[i], p_max[0][0]] += 1
+            total[y2[i], p_max[0][0]] += 1
+
+        else:
+            total[y2[i], p_max[0][0]] += 1
+
+    return conf, total
+
+def test(N1,N2,K):
+    """check the accuracy for test data"""
+    I, label = get_full_list()
+    X1,Y1,X2,Y2 = split_data(I,label)
+    a=np.arange(len(X1))
+    a=a.tolist()
+    b=np.arange(len(X2))
+    b=b.tolist()
+    index1 = random.sample(a,N1)
+    index2 = random.sample(b,N2)
+    x1 = []
+    y1=[]
+    x2=[]
+    y2=[]
+    for i in range(0, N1):
+        x1.append(X1[index1[i]])
+        y1.append(Y1[index1[i]])
+
+    for i in range(0, N2):
+        x2.append(X2[index2[i]])
+        y2.append(Y2[index2[i]])
+
+    conf, total = evaluate(x1,y1,x2,y2,K)
+
+    return conf, total
+
+def accuracy(conf,total):
+    accuracy = np.zeros((6,6))
+    for i in range(0,6):
+        for j in range(0,6):
+            accuracy[i,j]=conf[i,j]/np.sum(total,axis=1)[j]
+
+
+    return accuracy
+
+"""def test(x1,y1,x2,y2):
+
+    N1 = len(x1)
+    N2 = len(x2)
+
+    for i in range(0, N2):
+        d = []
+        for j in range(0, N1):
+            d.append(np.sum((x2[i]-x1[j])**2))
+
+def predict(training, label, video):"""
+
+def see(I):
+    """visualize motion history image"""
+    image = np.uint8((I-I.min())/(I.max()-I.min())*255)
+    cv2.imshow('MHI',image)
+    
+class activity_classifier:
+    """action classifier class"""
+
+    def __init__(self, X_train, y_train, num_neighbors):
+        """self.I = I
+        self.label = label
+        self.train_set, self.train_label, self.test_set, self.test_label = split_data(I,label)"""
+        self.X_train = X_train
+        self.y_train = y_train
+        self.X_train = np.array(self.X_train)
+        self.y_train = np.array(self.y_train)
+
+        self.num_neighbors = num_neighbors
+        self.clf = neighbors.KNeighborsClassifier(self.num_neighbors, weights='uniform')
+        
+
+    def train(self):
+
+        self.clf.fit(self.X_train,self.y_train)
+
+    def evaluate(self):
+
+        predict = self.clf.predict(self.X_train)
+
+        c_matrix = np.zeros((6,6))
+        p_matrix = np.zeros((6,6))
+
+        for i in range(0,predict.shape[0]):
+
+            c_matrix[self.y_train[i],predict[i]] += 1
+
+        for i in range(0,6):
+            for j in range(0,6):
+                p_matrix[i,j]=c_matrix[i,j]/np.sum(c_matrix,axis=1)[i]
+
+
+        return p_matrix
+    
+    def check(self,X_test,y_test):
+
+        predict = self.clf.predict(X_test)
+
+        c_matrix = np.zeros((6,6))
+        p_matrix = np.zeros((6,6))
+
+        for i in range(0,predict.shape[0]):
+
+            c_matrix[y_test[i],predict[i]] += 1
+
+        for i in range(0,6):
+            for j in range(0,6):
+                p_matrix[i,j]=c_matrix[i,j]/np.sum(c_matrix,axis=1)[i]
+
+
+        return p_matrix
+
+    def single_predict(self,video_name,thre,tau):
+        """predict a video with single action"""
+
+        I = import_video(video_name)
+        M = MHI(I,thre,tau)
+        Hu = Hu_moment(M)
+
+        y = self.clf.predict(Hu)
+        p = self.clf.predict_proba(Hu)
+
+        a = np.zeros(6)
+
+        for i in range(0,len(Hu)):
+            a[y[i]] += 1
+
+        a_max = np.where(a==a.max())
+
+        a_p = a/np.sum(a)
+
+        return a_max[0][0],a_p
+
+    def single_frame_predict(self,frame,thre,tau):
+        """predict the action of a single frame"""
+
+        M = MHI(frame,thre,tau)
+        Hu = Hu_moment(M)
+
+        y = self.clf.predict(Hu)
+        p = self.clf.predict_proba(Hu)
+
+        return y, p
+
+    def multiple_predict(self,video_name,thre,tau,window):
+        """ predice actions in a video with multiple actions by voting with a bunch of adjacent frames"""
+
+        I = import_video(video_name)
+        M = MHI(I,thre,tau)
+        Hu = Hu_moment(M)
+
+        y = self.clf.predict(Hu)
+        p = self.clf.predict_proba(Hu)
+
+        result = np.ones(len(M))*-1.0
+        check = np.ones(len(M))*-1.0
+
+        k=0
+
+        for i in range(0, len(M)):
+            
+            M00 = np.sum(M[i])
+            if M00 != 0:
+                check[i]=y[k]
+                k += 1
+
+        for i in range(0,len(M)):
+
+            if check[i] != -1:
+
+                a = np.zeros(6)
+
+                for j in range(i,min(i+window,len(M))):
+
+                    if check[j]!= -1.0:
+
+                        a[int(check[j])] += 1
+
+                    a_max = np.where(a==a.max())
+                    result[i] = a_max[0][0]
+                
+        return result
+
+
+def mp4_video_writer(filename, frame_size, fps=25):
+    """write video"""
+    fourcc = cv2.VideoWriter_fourcc(*'MP4V')
+    return cv2.VideoWriter(filename, fourcc, fps, frame_size)
+
+def label_video(video_name, frame_label, output_name,fps=25):
+    """label each frame with the predict results"""
+
+    labels = ['Boxing','Handclapping','Handwaving','Jogging','Running','Walking']      
+
+    image_gen = video_frame_generator(video_name)
+
+    image = image_gen.__next__()
+
+    h, w, d = image.shape
+
+    out_path = r'output\{}'.format(output_name)
+
+    video_out = mp4_video_writer(out_path, (w, h), fps)
+
+    frame_num = 0
+
+    while image is not None:
+
+        image1 = image.copy()
+        if frame_label[frame_num]!=-1:
+            image1 = cv2.putText(image1, labels[int(frame_label[frame_num])], (20,40), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,0,255),1)
+        
+        video_out.write(image1)
+
+        image = image_gen.__next__()
+        frame_num += 1
+
+    video_out.release()
+
+def combine_video(video_list, output_name, fps=25):
+    """combine several videos into one video"""
+
+    out_path = r'output\{}'.format(output_name)
+    image_gen0 = video_frame_generator(video_list[0])
+    image0 = image_gen0.__next__()
+
+    h,w,d = image0.shape
+
+    video_out = mp4_video_writer(out_path, (w,h), fps)
+
+    for i in range(0, len(video_list)):
+
+        image_gen = video_frame_generator(video_list[i])
+        image = image_gen.__next__()
+        frame_num = 0
+
+        while image is not None:
+            video_out.write(image)
+            image = image_gen.__next__()
+            frame_num += 1
+
+
+    video_out.release()
