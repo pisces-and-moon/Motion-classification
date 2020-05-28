@@ -1,12 +1,3 @@
-Files List:
-1. Final Project Report: The report on the results of final projects.
-2. Final Project Presentation: Presentaion slides for the final project. 
-3. image and label: two data files which store the calculated Hu-moments and labels for all the frames of the dataset. By directly importing this it could save 
-the time for reproducing the report results.
-4. Six videos with single action for each activity. 
-5. multiple_22_4 and multiple_24_1: two videos with multiple actions.
-6. pf.py, pf_experiment.py: python files for solving the final project problems. 
-
 To create the videos and images in the report, please follow the below instructions.
 1. Download the files pf.py and pf_experiment.py. pf.py includes the basic functions and pf_experiment.py will run these functions and produce images and videos.
    Put these two files under the directory of Python. 
