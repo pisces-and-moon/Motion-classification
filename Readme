@@ -1,5 +1,5 @@
 To create the videos and images in the report, please follow the below instructions.
-1. Download the files pf.py and pf_experiment.py. pf.py includes the basic functions and pf_experiment.py will run these functions and produce images and videos.
+1. Download the code Action Classification as pf.py and Run the action classification experiment as pf_experiment.py. pf.py includes the basic functions and pf_experiment.py will run these functions and produce images and videos.
    Put these two files under the directory of Python. 
 2. Please creat a folder named "input_videos" under python directory and put all the videos in the zip file in the input_video folder. 
 3. Please put the files "image" and "label" also in the "input_video" folder. These two contained the obtained Hu moments vectors and their corresponding labels for all the 
