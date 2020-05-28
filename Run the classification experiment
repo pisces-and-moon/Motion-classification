@@ -1,0 +1,148 @@
+import numpy as np
+import cv2
+import os
+import random
+from sklearn import neighbors
+import pickle
+import pf
+
+input_dir = "input_videos"
+output_dir = "output"
+
+class pf_test:
+
+    def __init__(self,K=5):
+
+        self.thre = 15
+        self.tau = 15
+        self.num_neighbors = K
+        self.N1 = 200000
+        self.N2 = 5000        
+
+        with open(r'input_videos\image','rb') as f:
+            self.I=pickle.load(f)
+        f.close()
+
+        with open(r'input_videos\label','rb') as f:
+            self.label = pickle.load(f)
+
+        f.close()
+
+        self.x1,self.y1,self.x2,self.y2 = pf.split_data(self.I,self.label,self.N1,self.N2)       
+        self.clf = pf.activity_classifier(self.x1,self.y1,self.num_neighbors)
+        self.clf.train()
+
+    def part1(self):
+
+        f=r'input_videos\person01_boxing_d1_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[50],r'output\Boxing.png')
+
+        f=r'input_videos\person16_handclapping_d4_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[50],r'output\Handclapping.png')
+
+        f=r'input_videos\person11_handwaving_d4_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[50],r'output\Handwaving.png')
+
+        f=r'input_videos\person19_jogging_d4_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[50],r'output\Jogging.png')
+
+        f=r'input_videos\person06_running_d1_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[25],r'output\Running.png')
+
+        f=r'input_videos\person07_walking_d3_uncomp.avi'
+        I=pf.import_video(f)
+        M=pf.MHI(I,self.thre,self.tau)
+        export_MHI(M[50],r'output\Walking.png')
+
+        
+
+    def part2(self):
+
+        a = self.clf.evaluate()
+        b = self.clf.check(self.x2, self.y2)
+
+        a_mean = 0.0
+        b_mean = 0.0
+
+        for i in range(0,6):
+            a_mean = a_mean + a[i,i]
+            b_mean = b_mean + b[i,i]
+
+        a_mean = a_mean/6
+        b_mean = b_mean/6
+
+        return a, b, a_mean, b_mean
+
+    def part3(self):
+
+        f=r'input_videos\person01_boxing_d1_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'Boxing_01.mp4')
+
+        f=r'input_videos\person16_handclapping_d4_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'Handclapping_16.mp4')
+
+        f=r'input_videos\person11_handwaving_d4_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'Handwaving_11.mp4')
+
+        f=r'input_videos\person19_jogging_d4_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,50)
+        pf.label_video(f,result,'Jogging_19.mp4')
+
+        f=r'input_videos\person06_running_d1_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,50)
+        pf.label_video(f,result,'Running_06.mp4')
+
+        f=r'input_videos\person07_walking_d3_uncomp.avi'
+        result=self.clf.multiple_predict(f,15,15,50)
+        pf.label_video(f,result,'Walking_07.mp4')
+
+        
+
+    def part4(self):
+
+        f=r'input_videos\multiple_22_4.mp4'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'multiple_22_4_labeled.mp4')
+
+        """f=r'input_videos\multiple_22.mp4'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'multiple_22_labeled.mp4')
+
+        f=r'input_videos\multiple_18.mp4'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'multiple_18_labeled.mp4')
+
+        f=r'input_videos\multiple_01.mp4'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'multiple_01_labeled.mp4')"""
+
+        f=r'input_videos\multiple_24_1.mp4'
+        result=self.clf.multiple_predict(f,15,15,30)
+        pf.label_video(f,result,'multiple_24_1_labeled.mp4')
+
+        
+
+def export_MHI(M, filename):
+
+    image = np.zeros((M.shape[0],M.shape[1],3))
+    image[:,:,0] = np.uint((M-M.min())/(M.max()-M.min())*255)
+    image[:,:,1] = image[:,:,0]
+    image[:,:,2] = image[:,:,1]
+    cv2.imwrite(filename, image)
+
+    
+    
+        
