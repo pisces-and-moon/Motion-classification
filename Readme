@@ -1,0 +1,28 @@
+Files List:
+1. Final Project Report: The report on the results of final projects.
+2. Final Project Presentation: Presentaion slides for the final project. 
+3. image and label: two data files which store the calculated Hu-moments and labels for all the frames of the dataset. By directly importing this it could save 
+the time for reproducing the report results.
+4. Six videos with single action for each activity. 
+5. multiple_22_4 and multiple_24_1: two videos with multiple actions.
+6. pf.py, pf_experiment.py: python files for solving the final project problems. 
+
+To create the videos and images in the report, please follow the below instructions.
+1. Download the files pf.py and pf_experiment.py. pf.py includes the basic functions and pf_experiment.py will run these functions and produce images and videos.
+   Put these two files under the directory of Python. 
+2. Please creat a folder named "input_videos" under python directory and put all the videos in the zip file in the input_video folder. 
+3. Please put the files "image" and "label" also in the "input_video" folder. These two contained the obtained Hu moments vectors and their corresponding labels for all the 
+frames. By directly import these files it can save the time to run the Hu moment calculations on all the video files. 
+4. Please Create a new folder names as "output", this will store the output videos and images. 
+5. Open Python shell, and type the following:
+	from pf_experiment import *
+	clf = pf_test(K=5)
+	clf.part1()
+	E, T, e, t = clf.part2()
+	clf.part3()
+	clf.part4()
+part1() will produce the motion history images in report Results and Discussion Part 1. 
+part2() will produce the confusion matrix in report Results and Discussion Part 2. E is the confusion matrix for training. T is for testing. e is the average accuracy for training
+set and t is the average accuracy for testing set. 
+part3() will produce the labeled videos for single action.
+part4() will produce the labeled videos for multiple actions. 
